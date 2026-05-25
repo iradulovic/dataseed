@@ -101,12 +101,14 @@ public class BogusRunner
                 ? _templateEngine.Evaluate(strategy.Template)
                 : faker.Random.AlphaNumeric(8),
 
-            var b when b != null && b.StartsWith("pickFrom:") => PickFromEntity(
-                b["pickFrom:".Length..], strategy),
-
+            // Must come BEFORE the generic "pickFrom:" arm — "pickFrom:values" would otherwise
+            // match that arm first, call PickFromEntity("values", ...) and always return null.
             "pickFrom:values" => strategy.Values.Count > 0
                 ? strategy.Values[_rng.Next(strategy.Values.Count)]
                 : (object?)null,
+
+            var b when b != null && b.StartsWith("pickFrom:") => PickFromEntity(
+                b["pickFrom:".Length..], strategy),
 
             var b when b != null && b.StartsWith("Random.Int(") => ParseAndGenerateInt(b),
             var b when b != null && b.StartsWith("Random.Decimal(") => ParseAndGenerateDecimal(b),
