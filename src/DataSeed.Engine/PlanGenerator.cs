@@ -51,7 +51,7 @@ public class PlanGenerator
             {
                 EntityType.Reference => await BuildReferenceEntityPlan(schema, entity, ct),
                 EntityType.Taxonomy => await BuildTaxonomyEntityPlan(schema, entity, ct),
-                EntityType.Dynamic => BuildDynamicEntityPlan(schema, entity),
+                EntityType.Dynamic => await BuildDynamicEntityPlanAsync(schema, entity, plan, ct),
                 _ => throw new InvalidOperationException($"Unknown entity type: {entity.Type}")
             };
 
@@ -136,16 +136,27 @@ public class PlanGenerator
         };
     }
 
-    private EntityPlan BuildDynamicEntityPlan(DomainSchema schema, EntityDefinition entity)
+    private async Task<EntityPlan> BuildDynamicEntityPlanAsync(
+        DomainSchema schema,
+        EntityDefinition entity,
+        PlanFile plan,
+        CancellationToken ct)
     {
         var strategies = new Dictionary<string, PropertyStrategy>();
+        var propertyStructures = new Dictionary<string, PropertyStructure>();
 
         foreach (var prop in entity.Properties)
         {
             var hints = HintParser.Parse(prop.Hints);
             var strategy = new PropertyStrategy();
 
-            if (hints.DerivedTemplate is not null)
+            if (hints.StructuredTemplate)
+            {
+                strategy.Bogus = "structuredTemplate";
+                var structure = await BuildPropertyStructureAsync(schema, entity, prop, hints, plan, ct);
+                propertyStructures[prop.Name] = structure;
+            }
+            else if (hints.DerivedTemplate is not null)
             {
                 strategy.Bogus = "derived";
                 strategy.Template = hints.DerivedTemplate;
@@ -192,8 +203,130 @@ public class PlanGenerator
         {
             Type = "dynamic",
             Count = entity.Count ?? 0,
-            PropertyStrategies = strategies
+            PropertyStrategies = strategies,
+            PropertyStructures = propertyStructures
         };
+    }
+
+    private async Task<PropertyStructure> BuildPropertyStructureAsync(
+        DomainSchema schema,
+        EntityDefinition entity,
+        PropertyDefinition prop,
+        HintSet hints,
+        PlanFile plan,
+        CancellationToken ct)
+    {
+        if (hints.StructuredTemplateRef is null)
+        {
+            var prompt = PromptBuilder.BuildStructuredTemplatePrompt(schema, entity, prop);
+            var json = await _provider.CompleteAsync(prompt, ct);
+            return ParsePropertyStructure(json);
+        }
+        else
+        {
+            var refPropName = hints.StructuredTemplateRef;
+            var refValues = ResolveRefValues(entity, refPropName, plan);
+            var refEntityName = entity.Properties
+                .FirstOrDefault(p => p.Name == refPropName)?.Ref ?? refPropName;
+
+            var prompt = PromptBuilder.BuildStructuredTemplateWithRefPrompt(
+                schema, entity, prop, refEntityName, refValues);
+            var json = await _provider.CompleteAsync(prompt, ct);
+            return ParsePropertyStructureWithRef(json, refPropName);
+        }
+    }
+
+    private static List<string> ResolveRefValues(
+        EntityDefinition entity,
+        string refPropName,
+        PlanFile plan)
+    {
+        var refProp = entity.Properties.FirstOrDefault(p => p.Name == refPropName);
+        if (refProp?.Ref is null) return new List<string>();
+
+        var refEntityName = refProp.Ref;
+        if (!plan.Entities.TryGetValue(refEntityName, out var refEntityPlan))
+            return new List<string>();
+
+        if (refEntityPlan.Type == "taxonomy")
+        {
+            var sep = refEntityPlan.Separator ?? " > ";
+            return TaxonomyFlattener.GetLeafPaths(refEntityPlan.ResolvedTree, sep);
+        }
+
+        if (refEntityPlan.Type == "reference")
+        {
+            var nameField = refProp.Name.Contains("name", StringComparison.OrdinalIgnoreCase)
+                ? "name"
+                : refEntityPlan.Resolved.FirstOrDefault()?.Keys
+                    .FirstOrDefault(k => !k.Equals("id", StringComparison.OrdinalIgnoreCase))
+                  ?? "id";
+            return refEntityPlan.Resolved
+                .Select(r => r.TryGetValue(nameField, out var v) ? v?.ToString() : null)
+                .Where(v => v is not null)
+                .Select(v => v!)
+                .ToList();
+        }
+
+        return new List<string>();
+    }
+
+    private static PropertyStructure ParsePropertyStructure(string json)
+    {
+        var structure = new PropertyStructure();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            FillStructureFromElement(root, structure.Templates, structure.Parts);
+        }
+        catch
+        {
+            structure.Templates["default"] = "{value}";
+            structure.Parts["value"] = new StructureParts { Values = ["item"] };
+        }
+        return structure;
+    }
+
+    private static PropertyStructure ParsePropertyStructureWithRef(string json, string refPropName)
+    {
+        var structure = new PropertyStructure { Ref = refPropName };
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            foreach (var entry in doc.RootElement.EnumerateObject())
+            {
+                var refStructure = new RefStructure();
+                FillStructureFromElement(entry.Value, refStructure.Templates, refStructure.Parts);
+                structure.Structures[entry.Name] = refStructure;
+            }
+        }
+        catch { }
+        return structure;
+    }
+
+    private static void FillStructureFromElement(
+        JsonElement el,
+        Dictionary<string, string> templates,
+        Dictionary<string, StructureParts> parts)
+    {
+        if (el.TryGetProperty("templates", out var templatesEl))
+        {
+            foreach (var t in templatesEl.EnumerateObject())
+                templates[t.Name] = t.Value.GetString() ?? string.Empty;
+        }
+
+        if (el.TryGetProperty("parts", out var partsEl))
+        {
+            foreach (var p in partsEl.EnumerateObject())
+            {
+                var sp = new StructureParts();
+                if (p.Value.TryGetProperty("values", out var valuesEl))
+                    foreach (var v in valuesEl.EnumerateArray())
+                        sp.Values.Add(v.GetString() ?? string.Empty);
+                parts[p.Name] = sp;
+            }
+        }
     }
 
     private static string InferBogusMethod(DataSeed.Schema.Models.PropertyDefinition prop)

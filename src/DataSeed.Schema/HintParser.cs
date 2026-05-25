@@ -73,6 +73,20 @@ public static class HintParser
                 );
                 continue;
             }
+
+            if (hint == "structuredTemplate")
+            {
+                result.StructuredTemplate = true;
+                continue;
+            }
+
+            m = Regex.Match(hint, @"^structuredTemplate:\s*ref=(.+)$");
+            if (m.Success)
+            {
+                result.StructuredTemplate = true;
+                result.StructuredTemplateRef = m.Groups[1].Value.Trim();
+                continue;
+            }
         }
 
         return result;

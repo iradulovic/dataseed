@@ -17,4 +17,6 @@ public class HintSet
     public bool DepthLeaf { get; set; }
     public (int Min, int Max)? LinesPerParent { get; set; }
     public (DateTime Start, DateTime End)? DateRange { get; set; }
+    public bool StructuredTemplate { get; set; }
+    public string? StructuredTemplateRef { get; set; }
 }

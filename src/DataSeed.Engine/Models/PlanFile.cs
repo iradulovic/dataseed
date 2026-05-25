@@ -28,12 +28,32 @@ public class EntityPlan
     // For dynamic entities
     public int Count { get; set; }
     public Dictionary<string, PropertyStrategy> PropertyStrategies { get; set; } = new();
+    public Dictionary<string, PropertyStructure> PropertyStructures { get; set; } = new();
 }
 
 public class TaxonomyNode
 {
     public string Node { get; set; } = string.Empty;
     public List<TaxonomyNode> Children { get; set; } = new();
+}
+
+public class PropertyStructure
+{
+    public string? Ref { get; set; }
+    public Dictionary<string, string> Templates { get; set; } = new();
+    public Dictionary<string, StructureParts> Parts { get; set; } = new();
+    public Dictionary<string, RefStructure> Structures { get; set; } = new();
+}
+
+public class RefStructure
+{
+    public Dictionary<string, string> Templates { get; set; } = new();
+    public Dictionary<string, StructureParts> Parts { get; set; } = new();
+}
+
+public class StructureParts
+{
+    public List<string> Values { get; set; } = new();
 }
 
 public class PropertyStrategy

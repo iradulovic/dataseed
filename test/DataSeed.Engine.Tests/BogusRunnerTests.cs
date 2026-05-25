@@ -103,6 +103,171 @@ public class BogusRunnerTests
         });
     }
 
+    // ── structuredTemplate ───────────────────────────────────────────────────
+
+    [Fact]
+    public void StructuredTemplate_no_ref_produces_assembled_string()
+    {
+        var runner = MakeRunner();
+        var entity = SimpleEntity("Customer", new PropertyDefinition { Name = "companyName" });
+        var structure = new PropertyStructure
+        {
+            Templates = new() { ["default"] = "{city} {trade} {type}" },
+            Parts = new()
+            {
+                ["city"] = new StructureParts { Values = ["Midwest", "National"] },
+                ["trade"] = new StructureParts { Values = ["Plumbing", "HVAC"] },
+                ["type"] = new StructureParts { Values = ["Supply Co.", "Inc."] }
+            }
+        };
+        var plan = new EntityPlan { Type = "dynamic", Count = 10 };
+        plan.PropertyStrategies["companyName"] = new PropertyStrategy { Bogus = "structuredTemplate" };
+        plan.PropertyStructures["companyName"] = structure;
+
+        var records = runner.GenerateRecords(entity, plan, count: 10);
+
+        Assert.All(records, r =>
+        {
+            var val = r["companyName"]?.ToString();
+            Assert.NotNull(val);
+            Assert.NotEmpty(val);
+        });
+    }
+
+    [Fact]
+    public void StructuredTemplate_uses_quality_profile_variant()
+    {
+        var runner = MakeRunner();
+        var entity = new EntityDefinition
+        {
+            Name = "Product",
+            Type = EntityType.Dynamic,
+            Count = 10,
+            Properties = [new PropertyDefinition { Name = "description" }],
+            QualityProfile = new() { ["gold"] = "100%" }
+        };
+        var structure = new PropertyStructure
+        {
+            Templates = new()
+            {
+                ["default"] = "generic item",
+                ["gold"] = "{size} premium {material} valve"
+            },
+            Parts = new()
+            {
+                ["size"] = new StructureParts { Values = ["1/2 in."] },
+                ["material"] = new StructureParts { Values = ["brass"] }
+            }
+        };
+        var plan = new EntityPlan { Type = "dynamic", Count = 10 };
+        plan.PropertyStrategies["description"] = new PropertyStrategy { Bogus = "structuredTemplate" };
+        plan.PropertyStructures["description"] = structure;
+
+        var records = runner.GenerateRecords(entity, plan, count: 10);
+
+        Assert.All(records, r => Assert.Equal("1/2 in. premium brass valve", r["description"]?.ToString()));
+    }
+
+    [Fact]
+    public void StructuredTemplate_with_ref_picks_structure_by_ref_value()
+    {
+        var runner = MakeRunner();
+        var entity = SimpleEntity("Product",
+            new PropertyDefinition { Name = "categoryPath" },
+            new PropertyDefinition { Name = "description" });
+        var structure = new PropertyStructure
+        {
+            Ref = "categoryPath",
+            Structures = new()
+            {
+                ["Valves"] = new RefStructure
+                {
+                    Templates = new() { ["default"] = "{size} valve" },
+                    Parts = new() { ["size"] = new StructureParts { Values = ["1/2 in."] } }
+                }
+            }
+        };
+        var plan = new EntityPlan { Type = "dynamic", Count = 2 };
+        plan.PropertyStrategies["categoryPath"] = new PropertyStrategy
+        {
+            Bogus = "pickFrom:values",
+            Values = ["Valves"]
+        };
+        plan.PropertyStrategies["description"] = new PropertyStrategy { Bogus = "structuredTemplate" };
+        plan.PropertyStructures["description"] = structure;
+
+        var records = runner.GenerateRecords(entity, plan, count: 5);
+
+        Assert.All(records, r => Assert.Equal("1/2 in. valve", r["description"]?.ToString()));
+    }
+
+    [Fact]
+    public void StructuredTemplate_ref_unknown_value_uses_fallback()
+    {
+        var runner = MakeRunner();
+        var entity = SimpleEntity("Product",
+            new PropertyDefinition { Name = "categoryPath" },
+            new PropertyDefinition { Name = "description" });
+        var structure = new PropertyStructure
+        {
+            Ref = "categoryPath",
+            Structures = new()
+            {
+                ["Valves"] = new RefStructure
+                {
+                    Templates = new() { ["default"] = "{size} valve" },
+                    Parts = new() { ["size"] = new StructureParts { Values = ["1/2 in."] } }
+                }
+            }
+        };
+        var plan = new EntityPlan { Type = "dynamic", Count = 2 };
+        plan.PropertyStrategies["categoryPath"] = new PropertyStrategy
+        {
+            Bogus = "pickFrom:values",
+            Values = ["Unknown Category"]
+        };
+        plan.PropertyStrategies["description"] = new PropertyStrategy { Bogus = "structuredTemplate" };
+        plan.PropertyStructures["description"] = structure;
+
+        var records = runner.GenerateRecords(entity, plan, count: 3);
+
+        // Fallback produces entityName item
+        Assert.All(records, r => Assert.Equal("Product item", r["description"]?.ToString()));
+    }
+
+    [Fact]
+    public void StructuredTemplate_ref_walks_up_path_for_ancestor_match()
+    {
+        var runner = MakeRunner();
+        var entity = SimpleEntity("Product",
+            new PropertyDefinition { Name = "categoryPath" },
+            new PropertyDefinition { Name = "description" });
+        var structure = new PropertyStructure
+        {
+            Ref = "categoryPath",
+            Structures = new()
+            {
+                ["Plumbing > Valves"] = new RefStructure
+                {
+                    Templates = new() { ["default"] = "valve item" },
+                    Parts = new()
+                }
+            }
+        };
+        var plan = new EntityPlan { Type = "dynamic", Count = 1 };
+        plan.PropertyStrategies["categoryPath"] = new PropertyStrategy
+        {
+            Bogus = "pickFrom:values",
+            Values = ["Plumbing > Valves > Ball Valves"]
+        };
+        plan.PropertyStrategies["description"] = new PropertyStrategy { Bogus = "structuredTemplate" };
+        plan.PropertyStructures["description"] = structure;
+
+        var records = runner.GenerateRecords(entity, plan, count: 3);
+
+        Assert.All(records, r => Assert.Equal("valve item", r["description"]?.ToString()));
+    }
+
     // ── ref / pickFrom:<Entity>.id ────────────────────────────────────────────
 
     [Fact]
