@@ -101,4 +101,28 @@ public class HintParserTests
         Assert.Equal(10, hints.NullablePercent);
         Assert.Equal("random", hints.Distribution);
     }
+
+    [Fact]
+    public void StructuredTemplate_plain_parsed()
+    {
+        var hints = HintParser.Parse(["structuredTemplate"]);
+        Assert.True(hints.StructuredTemplate);
+        Assert.Null(hints.StructuredTemplateRef);
+    }
+
+    [Fact]
+    public void StructuredTemplate_with_ref_parsed()
+    {
+        var hints = HintParser.Parse(["structuredTemplate: ref=categoryPath"]);
+        Assert.True(hints.StructuredTemplate);
+        Assert.Equal("categoryPath", hints.StructuredTemplateRef);
+    }
+
+    [Fact]
+    public void StructuredTemplate_compatible_with_nullable()
+    {
+        var hints = HintParser.Parse(["structuredTemplate", "nullable: 30%"]);
+        Assert.True(hints.StructuredTemplate);
+        Assert.Equal(30, hints.NullablePercent);
+    }
 }

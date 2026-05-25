@@ -91,6 +91,16 @@ public class SchemaValidator
                             errors.Add(new($"Property '{entity.Name}.{prop.Name}' derived template references unknown entity '{refName}'."));
                     }
                 }
+
+                if (hints.StructuredTemplate)
+                {
+                    if (hints.DerivedTemplate is not null)
+                        errors.Add(new($"Property '{entity.Name}.{prop.Name}': 'structuredTemplate' is incompatible with 'derived'."));
+                    if (hints.Values.Count > 0)
+                        errors.Add(new($"Property '{entity.Name}.{prop.Name}': 'structuredTemplate' is incompatible with 'values'."));
+                    if (hints.Range.HasValue)
+                        errors.Add(new($"Property '{entity.Name}.{prop.Name}': 'structuredTemplate' is incompatible with 'range'."));
+                }
             }
         }
 

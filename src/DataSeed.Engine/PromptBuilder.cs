@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using System.Linq;
 using DataSeed.Schema.Models;
 
 namespace DataSeed.Engine;
@@ -64,6 +65,82 @@ public static class PromptBuilder
         sb.AppendLine("  \"tree\": [{\"node\": \"Category A\", \"children\": [{\"node\": \"Sub 1\", \"children\": []}]}],");
         sb.AppendLine("  \"weights\": {\"Category A > Sub 1\": 1.0}");
         sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    public static string BuildStructuredTemplatePrompt(
+        DomainSchema schema,
+        EntityDefinition entity,
+        PropertyDefinition prop)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Respond with valid JSON only. No prose, no markdown fences.");
+        sb.AppendLine();
+        sb.AppendLine($"Domain: {schema.Description}");
+        sb.AppendLine($"Entity: {entity.Name} — {entity.Description}");
+        sb.AppendLine($"Property: {prop.Name} — {prop.Description}");
+        sb.AppendLine();
+
+        var hasQualityProfile = entity.QualityProfile.Count > 0;
+        sb.AppendLine($"Produce a JSON structure for generating realistic {prop.Name} values for this entity in this domain.");
+        sb.AppendLine("The structure must contain:");
+        sb.AppendLine("  \"templates\": object with variant keys. Always include \"default\".");
+        if (hasQualityProfile)
+        {
+            var bucketNames = string.Join(", ", entity.QualityProfile.Keys.Select(k => $"\"{k}\""));
+            sb.AppendLine($"  Also include variants for each quality profile bucket: {bucketNames}.");
+        }
+        sb.AppendLine("  \"parts\": object where each key matches a {token} in the templates, with a \"values\" array of 6-12 realistic domain-specific strings.");
+        sb.AppendLine();
+        sb.AppendLine("Example:");
+        sb.AppendLine("{");
+        sb.AppendLine("  \"templates\": {\"default\": \"{prefix}-{series}\"},");
+        sb.AppendLine("  \"parts\": {\"prefix\": {\"values\": [\"A\", \"B\"]}, \"series\": {\"values\": [\"100\", \"200\"]}}");
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    public static string BuildStructuredTemplateWithRefPrompt(
+        DomainSchema schema,
+        EntityDefinition entity,
+        PropertyDefinition prop,
+        string refEntityName,
+        IEnumerable<string> refValues)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Respond with valid JSON only. No prose, no markdown fences.");
+        sb.AppendLine();
+        sb.AppendLine($"Domain: {schema.Description}");
+        sb.AppendLine($"Entity: {entity.Name} — {entity.Description}");
+        sb.AppendLine($"Property: {prop.Name} — {prop.Description}");
+        sb.AppendLine($"Referenced entity: {refEntityName}");
+        sb.AppendLine();
+        sb.AppendLine($"For each of the following {refEntityName} values, produce a JSON structure for generating realistic {prop.Name} values specific to that type.");
+        sb.AppendLine();
+        sb.AppendLine($"{refEntityName} values:");
+        foreach (var v in refValues)
+            sb.AppendLine($"  - {v}");
+        sb.AppendLine();
+
+        var hasQualityProfile = entity.QualityProfile.Count > 0;
+        sb.AppendLine("The response must be a JSON object keyed by the value above. Each value contains:");
+        sb.AppendLine("  \"templates\": object with variant keys. Always include \"default\".");
+        if (hasQualityProfile)
+        {
+            var bucketNames = string.Join(", ", entity.QualityProfile.Keys.Select(k => $"\"{k}\""));
+            sb.AppendLine($"  Also include variants for each quality profile bucket: {bucketNames}.");
+        }
+        sb.AppendLine("  \"parts\": object where each key matches a {token} in the templates, with a \"values\" array of 6-12 realistic domain-specific strings for that type.");
+        sb.AppendLine();
+        sb.AppendLine("Example (for a taxonomy-referenced property):");
+        sb.AppendLine("{");
+        sb.AppendLine("  \"Category A > Sub 1\": {");
+        sb.AppendLine("    \"templates\": {\"default\": \"{size} {material} widget\"},");
+        sb.AppendLine("    \"parts\": {\"size\": {\"values\": [\"small\", \"large\"]}, \"material\": {\"values\": [\"steel\", \"brass\"]}}");
+        sb.AppendLine("  }");
+        sb.AppendLine("}");
+
         return sb.ToString();
     }
 

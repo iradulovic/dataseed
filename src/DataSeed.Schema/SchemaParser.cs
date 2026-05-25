@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 using DataSeed.Schema.Models;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -93,7 +94,17 @@ public class SchemaParser
                 else if (item is Dictionary<object, object> dict)
                 {
                     foreach (var kv in dict)
-                        result.Add($"{kv.Key}: {kv.Value}");
+                    {
+                        if (kv.Value is Dictionary<object, object> nested)
+                        {
+                            var nestedParts = string.Join(",", nested.Select(n => $"{n.Key}={n.Value}"));
+                            result.Add($"{kv.Key}: {nestedParts}");
+                        }
+                        else
+                        {
+                            result.Add($"{kv.Key}: {kv.Value}");
+                        }
+                    }
                 }
             }
             return result;

@@ -114,4 +114,56 @@ public class SchemaValidatorTests
         var errors = _validator.Validate(schema);
         Assert.Contains(errors, e => e.Message.Contains("sum to"));
     }
+
+    [Fact]
+    public void StructuredTemplate_with_derived_is_error()
+    {
+        var schema = ValidSchema();
+        schema.Entities[1].Properties.Add(new PropertyDefinition
+        {
+            Name = "label",
+            Hints = ["structuredTemplate", "derived: \"{sequence:5}\""]
+        });
+        var errors = _validator.Validate(schema);
+        Assert.Contains(errors, e => e.Message.Contains("incompatible with 'derived'"));
+    }
+
+    [Fact]
+    public void StructuredTemplate_with_values_is_error()
+    {
+        var schema = ValidSchema();
+        schema.Entities[1].Properties.Add(new PropertyDefinition
+        {
+            Name = "label",
+            Hints = ["structuredTemplate", "values: [A, B, C]"]
+        });
+        var errors = _validator.Validate(schema);
+        Assert.Contains(errors, e => e.Message.Contains("incompatible with 'values'"));
+    }
+
+    [Fact]
+    public void StructuredTemplate_with_range_is_error()
+    {
+        var schema = ValidSchema();
+        schema.Entities[1].Properties.Add(new PropertyDefinition
+        {
+            Name = "label",
+            Hints = ["structuredTemplate", "range: 1-100"]
+        });
+        var errors = _validator.Validate(schema);
+        Assert.Contains(errors, e => e.Message.Contains("incompatible with 'range'"));
+    }
+
+    [Fact]
+    public void StructuredTemplate_alone_is_valid()
+    {
+        var schema = ValidSchema();
+        schema.Entities[1].Properties.Add(new PropertyDefinition
+        {
+            Name = "companyName",
+            Hints = ["structuredTemplate"]
+        });
+        var errors = _validator.Validate(schema);
+        Assert.DoesNotContain(errors, e => e.Message.Contains("companyName"));
+    }
 }

@@ -13,6 +13,7 @@ public class BogusRunner
     private readonly Random _rng;
     private readonly Dictionary<string, List<Dictionary<string, object?>>> _generatedEntities;
     private readonly DerivedTemplateEngine _templateEngine;
+    private readonly ITemplateResolver _templateResolver;
 
     public BogusRunner(int seed, Dictionary<string, List<Dictionary<string, object?>>> generatedEntities)
     {
@@ -20,6 +21,7 @@ public class BogusRunner
         _rng = new Random(seed);
         _generatedEntities = generatedEntities;
         _templateEngine = new DerivedTemplateEngine(generatedEntities, seed);
+        _templateResolver = new TemplateResolver();
     }
 
     public List<Dictionary<string, object?>> GenerateRecords(
@@ -53,7 +55,8 @@ public class BogusRunner
                     continue;
                 }
 
-                var value = GenerateValue(faker, prop.Name, entity.Name, strategy, profile);
+                plan.PropertyStructures.TryGetValue(prop.Name, out var structure);
+                var value = GenerateValue(faker, prop.Name, entity.Name, strategy, profile, record, structure);
                 record[prop.Name] = value;
             }
 
@@ -89,7 +92,14 @@ public class BogusRunner
         return all;
     }
 
-    private object? GenerateValue(Faker faker, string propName, string entityName, PropertyStrategy strategy, string? profile)
+    private object? GenerateValue(
+        Faker faker,
+        string propName,
+        string entityName,
+        PropertyStrategy strategy,
+        string? profile,
+        Dictionary<string, object?> currentRecord,
+        PropertyStructure? structure)
     {
         // Apply null probability
         if (strategy.NullPercent.HasValue && _rng.Next(100) < strategy.NullPercent.Value)
@@ -97,6 +107,9 @@ public class BogusRunner
 
         var rawValue = strategy.Bogus switch
         {
+            "structuredTemplate" when structure is not null =>
+                ResolveStructuredTemplate(structure, entityName, profile, currentRecord),
+
             "derived" => strategy.Template is not null
                 ? _templateEngine.Evaluate(strategy.Template)
                 : faker.Random.AlphaNumeric(8),
@@ -125,6 +138,69 @@ public class BogusRunner
         }
 
         return rawValue;
+    }
+
+    private object? ResolveStructuredTemplate(
+        PropertyStructure structure,
+        string entityName,
+        string? profile,
+        Dictionary<string, object?> currentRecord)
+    {
+        Dictionary<string, string> templates;
+        Dictionary<string, StructureParts> parts;
+
+        if (structure.Ref is not null)
+        {
+            var refValue = currentRecord.TryGetValue(structure.Ref, out var rv) ? rv?.ToString() : null;
+            var refStructure = FindRefStructure(structure, refValue, entityName);
+            templates = refStructure.Templates;
+            parts = refStructure.Parts;
+        }
+        else
+        {
+            templates = structure.Templates;
+            parts = structure.Parts;
+        }
+
+        var variantKey = profile is not null && templates.ContainsKey(profile)
+            ? profile
+            : "default";
+
+        if (!templates.TryGetValue(variantKey, out var template))
+            template = templates.Values.FirstOrDefault() ?? $"{entityName} item";
+
+        var readonlyParts = parts.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlyList<string>)kv.Value.Values);
+
+        return _templateResolver.Resolve(template, readonlyParts, _rng);
+    }
+
+    private RefStructure FindRefStructure(PropertyStructure structure, string? refValue, string entityName)
+    {
+        if (refValue is not null && structure.Structures.TryGetValue(refValue, out var exact))
+            return exact;
+
+        if (refValue is not null)
+        {
+            // Walk up path segments (e.g. "A > B > C" → "A > B" → "A")
+            var segments = refValue.Split(" > ");
+            for (int len = segments.Length - 1; len >= 1; len--)
+            {
+                var ancestor = string.Join(" > ", segments[..len]);
+                if (structure.Structures.TryGetValue(ancestor, out var found))
+                    return found;
+            }
+
+            Console.Error.WriteLine($"[dataseed] structuredTemplate: no structure found for ref value '{refValue}', using fallback.");
+        }
+
+        // Ultimate fallback
+        return new RefStructure
+        {
+            Templates = new Dictionary<string, string> { ["default"] = $"{entityName} item" },
+            Parts = new Dictionary<string, StructureParts>()
+        };
     }
 
     private object? PickFromEntity(string spec, PropertyStrategy strategy)
