@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DataSeed.Cli/DataSeed.Cli.csproj" />
+    <Project Path="src/DataSeed.Engine/DataSeed.Engine.csproj" />
+    <Project Path="src/DataSeed.Providers/DataSeed.Providers.csproj" />
+    <Project Path="src/DataSeed.Schema/DataSeed.Schema.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/DataSeed.Cli.Tests/DataSeed.Cli.Tests.csproj" />
+    <Project Path="test/DataSeed.Engine.Tests/DataSeed.Engine.Tests.csproj" />
+    <Project Path="test/DataSeed.Providers.Tests/DataSeed.Providers.Tests.csproj" />
+    <Project Path="test/DataSeed.Schema.Tests/DataSeed.Schema.Tests.csproj" />
+  </Folder>
+</Solution>

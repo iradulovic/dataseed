@@ -1,0 +1,135 @@
+domain: Plumbing Distribution — Dataset B
+description: >
+  Distributor-side product catalog. Products have better marketing descriptions
+  but part numbers follow distributor internal conventions rather than supplier
+  originals. Supplier attribution is less consistent. Represents the same
+  product domain but expressed through a different organization's lens.
+
+entities:
+
+  - name: Product
+    type: dynamic
+    count: 1800
+    description: >
+      Plumbing or HVAC product from a distributor catalog.
+      Internal SKUs differ from supplier part numbers.
+    qualityProfile:
+      gold: 55%
+      poorDescription: 25%
+      missingSupplier: 20%
+    properties:
+      - name: sku
+        description: Internal distributor SKU, format differs from supplier part numbers
+        hints:
+          - unique
+          - derived: "{sequence:8}"
+      - name: description
+        description: >
+          Marketing or catalog product description. Gold records have full
+          descriptive copy. Poor records are vague or boilerplate.
+        hints:
+          - degradable: 25%
+      - name: manufacturerName
+        description: Manufacturer name as free text, not always normalized
+        hints:
+          - nullable: 20%
+      - name: manufacturerPartNumber
+        description: Supplier part number as known to the distributor, may be incomplete
+        hints:
+          - nullable: 35%
+      - name: categoryPath
+        ref: ProductCategory
+        hints:
+          - depth: leaf
+          - distribution: weighted
+      - name: listPrice
+        description: Distributor list price in USD
+        hints:
+          - range: 5-2500
+          - nullable: 10%
+      - name: uom
+        description: Unit of measure
+        hints:
+          - values: [EA, FT, LF, PK, CS, BX]
+
+  - name: Customer
+    type: dynamic
+    count: 250
+    description: Contractor or end-user purchasing from the distributor
+    properties:
+      - name: name
+        description: Company or individual customer name
+      - name: accountNumber
+        description: Distributor internal account number
+        hints:
+          - unique
+          - derived: "D-{sequence:5}"
+
+  - name: Location
+    type: dynamic
+    parent: Customer
+    description: Billing or shipping address for a customer
+    hints:
+      - linesPerParent: 1-3
+    properties:
+      - name: locationType
+        hints:
+          - values: [billto, shipto]
+      - name: locationName
+        description: Location or branch name
+        hints:
+          - nullable: 30%
+      - name: address1
+        description: Street address line 1
+      - name: address2
+        hints:
+          - nullable: 70%
+      - name: city
+        description: City name, US cities
+      - name: state
+        description: US state abbreviation
+        hints:
+          - values: [AL,AZ,AR,CA,CO,CT,FL,GA,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY]
+      - name: zip
+        description: US ZIP code
+
+  - name: Transaction
+    type: dynamic
+    count: 2500
+    description: Distributor sales transaction
+    hints:
+      - dateRange: "2023-06-01/2025-03-31"
+    properties:
+      - name: transactionNumber
+        description: Internal sales order number
+        hints:
+          - unique
+          - derived: "SO-{sequence:6}"
+      - name: transactionDate
+        description: Date of the transaction
+      - name: customerId
+        ref: Customer
+        hints:
+          - distribution: long-tail
+          - skew: 0.65
+
+  - name: TransactionLine
+    type: dynamic
+    parent: Transaction
+    description: Line item on a distributor sales order
+    hints:
+      - linesPerParent: 1-10
+    properties:
+      - name: productId
+        ref: Product
+        hints:
+          - distribution: long-tail
+          - skew: 0.75
+      - name: quantity
+        description: Quantity ordered
+        hints:
+          - range: 1-100
+      - name: unitPrice
+        description: Sold price per unit
+        hints:
+          - range: 5-2500

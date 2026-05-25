@@ -1,0 +1,72 @@
+domain: Plumbing Distribution Catalog
+description: >
+  Industrial plumbing and HVAC product catalog for a US-based distributor.
+  Products span residential and commercial plumbing, hydronic heating, and
+  light commercial HVAC. Supplier naming conventions follow real industrial
+  distribution patterns.
+
+entities:
+
+  - name: Supplier
+    type: reference
+    count: 12
+    description: >
+      Manufacturer or brand supplying plumbing and HVAC products to
+      industrial distributors. Mix of large national brands and regional suppliers.
+    properties:
+      - name: name
+        description: Full legal or trade name of the supplier
+        examples:
+          - Watts Water Technologies
+          - Mueller Industries
+          - Sioux Chief Manufacturing
+          - Nibco Inc.
+          - Viega LLC
+      - name: code
+        description: 2-4 character uppercase abbreviation used in part numbers
+        hints:
+          - unique
+        examples:
+          - WWT
+          - MUI
+          - SCM
+          - NBC
+          - VGA
+      - name: tier
+        description: Supplier tier in distribution hierarchy
+        hints:
+          - values: [national, regional, specialty]
+
+  - name: ProductCategory
+    type: taxonomy
+    description: >
+      Hierarchical classification of plumbing and HVAC products as used by
+      industrial distributors. Top level reflects major trade categories.
+      Should include approximately 5 top-level categories, 5-8 subcategories each,
+      and 4-8 product types at leaf level. Include some crossover products
+      between plumbing and HVAC (e.g. hydronic heating components).
+    depth: 3
+    separator: " > "
+    mustInclude:
+      - Plumbing > Valves > Ball Valves
+      - Plumbing > Valves > Gate Valves
+      - Plumbing > Valves > Check Valves
+      - Plumbing > Valves > Pressure Relief Valves
+      - Plumbing > Fittings > Couplings
+      - Plumbing > Fittings > Elbows
+      - Plumbing > Fittings > Tees
+      - Plumbing > Fittings > Reducers
+      - Plumbing > Pipe > Copper Pipe
+      - Plumbing > Pipe > PVC Pipe
+      - Plumbing > Pipe > PEX Tubing
+      - Plumbing > Water Heaters > Tank Water Heaters
+      - Plumbing > Water Heaters > Tankless Water Heaters
+      - Plumbing > Pumps > Circulator Pumps
+      - Plumbing > Pumps > Sump Pumps
+      - HVAC > Air Distribution > Flex Duct
+      - HVAC > Air Distribution > Rigid Duct
+      - HVAC > Air Distribution > Diffusers
+      - HVAC > Hydronic Heating > Baseboard Heaters
+      - HVAC > Hydronic Heating > Expansion Tanks
+      - HVAC > Controls > Thermostats
+      - HVAC > Controls > Zone Valves

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DataSeed.Cli": {
+      "commandName": "Project",
+      "commandLineArgs": "plan plumbing-catalog.yaml --provider claude-code"
+    }
+  }
+}

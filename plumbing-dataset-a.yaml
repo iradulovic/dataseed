@@ -1,0 +1,135 @@
+domain: Plumbing Distribution — Dataset A
+description: >
+  Supplier-side product catalog. Products have structured part numbers
+  and supplier attribution but descriptions tend to be technical shorthand
+  rather than full marketing copy. Some products lack descriptions entirely.
+
+entities:
+
+  - name: Product
+    type: dynamic
+    count: 2000
+    description: >
+      Plumbing or HVAC product from a supplier catalog.
+      SKUs follow supplier part number conventions.
+    qualityProfile:
+      gold: 40%
+      poorDescription: 40%
+      missingSupplier: 20%
+    properties:
+      - name: sku
+        description: Supplier part number
+        hints:
+          - unique
+          - derived: "{supplier.code}-{sequence:5}"
+      - name: description
+        description: >
+          Technical product description. Gold records have full spec descriptions.
+          Poor records use abbreviations, truncated copy, or single-line shorthand.
+        hints:
+          - degradable: 40%
+      - name: supplierId
+        ref: Supplier
+        hints:
+          - nullable: 20%
+          - distribution: long-tail
+          - skew: 0.7
+      - name: categoryPath
+        ref: ProductCategory
+        hints:
+          - depth: leaf
+          - distribution: weighted
+      - name: listPrice
+        description: Supplier list price in USD
+        hints:
+          - range: 5-2500
+          - nullable: 15%
+      - name: uom
+        description: Unit of measure
+        hints:
+          - values: [EA, FT, LF, PK, CS, BX]
+
+  - name: Customer
+    type: dynamic
+    count: 300
+    description: Industrial distributor or contractor purchasing plumbing supplies
+    properties:
+      - name: name
+        description: Company name of the customer
+      - name: accountNumber
+        description: Customer account number
+        hints:
+          - unique
+          - derived: "ACCT-{sequence:6}"
+
+  - name: Location
+    type: dynamic
+    parent: Customer
+    description: Billing or shipping address for a customer
+    hints:
+      - linesPerParent: 1-4
+    properties:
+      - name: locationType
+        hints:
+          - values: [billto, shipto]
+      - name: locationName
+        description: Location or branch name
+      - name: address1
+        description: Street address line 1
+      - name: address2
+        description: Suite, unit, or secondary address
+        hints:
+          - nullable: 60%
+      - name: city
+        description: City name, US cities
+      - name: state
+        description: US state abbreviation
+        hints:
+          - values: [AL,AZ,AR,CA,CO,CT,FL,GA,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY]
+      - name: zip
+        description: US ZIP code
+
+  - name: Transaction
+    type: dynamic
+    count: 3000
+    description: Customer purchase transaction
+    hints:
+      - dateRange: "2023-01-01/2024-12-31"
+    properties:
+      - name: transactionNumber
+        description: Transaction or order number
+        hints:
+          - unique
+          - derived: "ORD-{sequence:7}"
+      - name: transactionDate
+        description: Date of the transaction
+      - name: customerId
+        ref: Customer
+        hints:
+          - distribution: long-tail
+          - skew: 0.6
+      - name: shipToLocationId
+        ref: Location
+        hints:
+          - nullable: 5%
+
+  - name: TransactionLine
+    type: dynamic
+    parent: Transaction
+    description: Individual line item on a transaction
+    hints:
+      - linesPerParent: 1-12
+    properties:
+      - name: productId
+        ref: Product
+        hints:
+          - distribution: long-tail
+          - skew: 0.75
+      - name: quantity
+        description: Quantity ordered
+        hints:
+          - range: 1-100
+      - name: unitPrice
+        description: Actual unit price charged
+        hints:
+          - range: 5-2500
